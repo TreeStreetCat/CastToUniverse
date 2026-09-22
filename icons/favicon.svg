@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1c1c32" />
+      <stop offset="1" stop-color="#0a0a14" />
+    </linearGradient>
+    <linearGradient id="disc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6" />
+      <stop offset="1" stop-color="#ff3ea5" />
+    </linearGradient>
+  </defs>
+
+  <rect width="32" height="32" rx="7" fill="url(#bg)" />
+
+  <!-- 8 段彩色轮盘环：用单段虚线圆 + 逐段偏移拼出来 -->
+  <g transform="rotate(-90 16 16)" fill="none" stroke-width="4.5" stroke-dasharray="8.2 67.198">
+    <circle cx="16" cy="16" r="12" stroke="#8b5cf6" stroke-dashoffset="0" />
+    <circle cx="16" cy="16" r="12" stroke="#22e1ff" stroke-dashoffset="-9.425" />
+    <circle cx="16" cy="16" r="12" stroke="#ff3ea5" stroke-dashoffset="-18.85" />
+    <circle cx="16" cy="16" r="12" stroke="#ffb020" stroke-dashoffset="-28.274" />
+    <circle cx="16" cy="16" r="12" stroke="#b6ff3b" stroke-dashoffset="-37.699" />
+    <circle cx="16" cy="16" r="12" stroke="#ff6b6b" stroke-dashoffset="-47.124" />
+    <circle cx="16" cy="16" r="12" stroke="#4f8cff" stroke-dashoffset="-56.549" />
+    <circle cx="16" cy="16" r="12" stroke="#00d6a3" stroke-dashoffset="-65.973" />
+  </g>
+
+  <circle cx="16" cy="16" r="7.6" fill="url(#disc)" />
+  <text x="16" y="16.2" text-anchor="middle" dominant-baseline="central"
+        font-family="PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif"
+        font-size="11" font-weight="700" fill="#ffffff">抛</text>
+</svg>

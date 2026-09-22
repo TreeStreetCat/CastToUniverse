@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>抛给宇宙 · 随机决策工具箱</title>
+<meta name="description" content="抛给宇宙 —— 答案之书、大转盘、硬币骰子、盲盒抽签、随机时钟、今天不做什么。把选择抛给宇宙，把自己还给自己。" />
+<meta name="theme-color" content="#0b0b16" />
+<meta name="color-scheme" content="dark" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="抛给宇宙" />
+
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- 背景光晕（纯装饰） -->
+<div class="aurora" aria-hidden="true">
+  <span class="aurora-blob b1"></span>
+  <span class="aurora-blob b2"></span>
+  <span class="aurora-blob b3"></span>
+  <span class="aurora-grid"></span>
+</div>
+
+<div class="app-shell">
+  <header class="topbar" id="topbar"></header>
+  <main class="view" id="view" tabindex="-1"></main>
+  <nav class="tabbar" id="tabbar" aria-label="主导航"></nav>
+</div>
+
+<!-- 全局提示 -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- 弹窗挂载点 -->
+<div class="modal-root" id="modalRoot"></div>
+
+<!--
+  加载顺序有依赖：app.js 先定义 window.App 与通用能力（随机 / 音效 / 震动 / 路由），
+  再由各功能模块调用 App.register() 自注册，最后 app.js 在 DOMContentLoaded 时初始化。
+-->
+<!-- 可选增强：结果揭晓时的粒子庆祝（canvas-confetti, MIT）。缺失或加载失败不影响任何功能 -->
+<script src="vendor/canvas-confetti.min.js" defer></script>
+<script src="js/app.js"></script>
+<script src="js/answers.js"></script>
+<script src="js/wheel.js"></script>
+<script src="js/coin-dice.js"></script>
+<script src="js/blindbox.js"></script>
+<script src="js/reverse-coin.js"></script>
+<script src="js/countdown.js"></script>
+<script src="js/todo-list.js"></script>
+</body>
+</html>
