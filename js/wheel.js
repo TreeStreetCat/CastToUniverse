@@ -531,14 +531,26 @@
             return;
           }
 
-          const cleaned = list
+          // 去重规则与「添加一项」保持一致：同一个名称只保留第一个，
+          // 否则导入后转盘上会出现两个同名扇区，权重被悄悄拆成两半。
+          const seen = {};
+          const cleaned = [];
+          let dropped = 0;
+          list
             .filter((x) => x && typeof x.label === 'string' && x.label.trim())
             .slice(0, MAX_SEGMENTS)
-            .map((x, i) => ({
-              label: x.label.trim().slice(0, 14),
-              weight: Math.max(0, Math.min(99, Math.round(Number(x.weight) || 0))),
-              color: /^#[0-9a-fA-F]{3,8}$/.test(String(x.color || '')) ? String(x.color) : PALETTE[i % PALETTE.length]
-            }));
+            .forEach((x) => {
+              const label = x.label.trim().slice(0, 14);
+              if (seen[label]) { dropped += 1; return; }
+              seen[label] = true;
+              cleaned.push({
+                label: label,
+                weight: Math.max(0, Math.min(99, Math.round(Number(x.weight) || 0))),
+                color: /^#[0-9a-fA-F]{3,8}$/.test(String(x.color || ''))
+                  ? String(x.color)
+                  : PALETTE[cleaned.length % PALETTE.length]
+              });
+            });
 
           if (cleaned.length < MIN_SEGMENTS) {
             App.toast('配置里至少要有两个有效选项');
@@ -561,7 +573,9 @@
           paintEditor();
           draw();
           persist();
-          App.toast('已导入 ' + cleaned.length + ' 个选项');
+          App.toast(dropped
+            ? '已导入 ' + cleaned.length + ' 个选项，跳过 ' + dropped + ' 个重复项'
+            : '已导入 ' + cleaned.length + ' 个选项');
         };
         reader.onerror = () => {
           App.toast('读取文件失败，请重试');

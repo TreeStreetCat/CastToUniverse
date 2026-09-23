@@ -7,7 +7,30 @@
 (function () {
   'use strict';
 
-  const App = (window.App = { version: '1.1.0' });
+  const App = (window.App = { version: '1.2.0' });
+
+  /* =======================================================================
+     0. 品牌信息集中一处
+     改名 / 换标语时，只需改这里 + index.html + manifest.json 三处，
+     不必再在 8 个模块文件里逐个替换散落的字面量。
+     ======================================================================= */
+  const BRAND = {
+    name: '抛给宇宙',
+    tagline: '随机决策工具箱',
+    /** 分享面板标题：模块名为空时退回「品牌 · 标语」 */
+    title(mod) {
+      return mod ? BRAND.name + ' · ' + mod : BRAND.name + ' · ' + BRAND.tagline;
+    },
+    /** 分享正文的统一前缀，形如「抛给宇宙」答案之书： */
+    quote(mod, text) {
+      return '「' + BRAND.name + '」' + (mod ? mod + '：' : '') + text;
+    },
+    /** 去掉标题里的品牌前缀，用于图片卡片上的小字 */
+    strip(name) {
+      return String(name || '').replace(new RegExp('^' + BRAND.name + '\\s*·\\s*'), '');
+    }
+  };
+  App.BRAND = BRAND;
 
   /* =======================================================================
      1. 高质量随机
@@ -285,23 +308,49 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /**
-   * 带缓存的 JSON 加载。文件协议（file://）或离线时自动回退到内置数据，
-   * 保证任何一个工具在无网络时都可用。
-   */
+  /* =======================================================================
+     带缓存的 JSON 加载。文件协议（file://）或离线时自动回退到内置数据，
+     保证任何一个工具在无网络时都可用。
+
+     兜底策略（重要）：兜底是「软」的，不是一次失败就终身兜底。
+     - 这一次仍然立刻返回内置数据，用户不会被卡住；
+     - 但会把该地址标记为 fallback 并记录时间，冷却期（60s）过后下次再进模块时
+       会重新尝试真实数据，网络恢复后自动回到完整题库；
+     - 同时给 fetch 加了 8 秒超时，避免弱网下无限挂起。
+     ======================================================================= */
+  const DATA_RETRY_MS = 60 * 1000;
+  const DATA_TIMEOUT_MS = 8000;
   const dataCache = {};
+  const dataOrigin = {};      // 'network' | 'fallback'
+  const dataFallbackAt = {};
+
   async function loadData(url, fallback) {
-    if (dataCache[url]) return dataCache[url];
+    if (dataCache[url]) {
+      const stale = dataOrigin[url] === 'fallback' && (Date.now() - (dataFallbackAt[url] || 0)) < DATA_RETRY_MS;
+      if (!stale) return dataCache[url];   // 冷却期内直接复用，过期则往下重试网络
+    }
+
+    let ctrl = null;
+    let timer = null;
+    if (typeof AbortController === 'function') {
+      ctrl = new AbortController();
+      timer = setTimeout(() => ctrl.abort(), DATA_TIMEOUT_MS);
+    }
     try {
-      const res = await fetch(url, { cache: 'force-cache' });
+      const res = await fetch(url, { cache: 'force-cache', signal: ctrl ? ctrl.signal : undefined });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
       dataCache[url] = json;
+      dataOrigin[url] = 'network';
       return json;
     } catch (e) {
-      console.warn('[抛给宇宙] 数据加载失败，使用内置兜底数据：' + url, e);
+      console.warn('[' + BRAND.name + '] 数据加载失败，本次使用内置兜底数据：' + url, e);
+      if (dataOrigin[url] !== 'fallback') dataFallbackAt[url] = Date.now();
       dataCache[url] = fallback;
+      dataOrigin[url] = 'fallback';
       return fallback;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
@@ -317,21 +366,59 @@
      ======================================================================= */
   const prefersReducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
+  /* 粒子颜色改为从 CSS 变量读取：换肤时自动跟随，不再写死一组颜色。
+     读取失败（老浏览器）时退回当前这套霓虹默认值。 */
+  function themeColors() {
+    const css = window.getComputedStyle ? getComputedStyle(document.documentElement) : null;
+    const read = (name, dft) => {
+      if (!css) return dft;
+      const v = (css.getPropertyValue(name) || '').trim();
+      return v || dft;
+    };
+    return [
+      read('--violet', '#8b5cf6'),
+      read('--cyan', '#22e1ff'),
+      read('--magenta', '#ff3ea5'),
+      read('--amber', '#ffb020'),
+      read('--lime', '#b6ff3b')
+    ];
+  }
+
+  /* 按需加载：插件不再随首屏一起下载，第一次真的要放彩带时才注入。
+     它已被 Service Worker 预缓存，所以离线场景下依旧可用；
+     加载失败只是没有彩带，不影响任何功能。 */
+  let confettiTask = null;
+  function loadConfetti() {
+    if (typeof window.confetti === 'function') return Promise.resolve(true);
+    if (confettiTask) return confettiTask;
+    confettiTask = new Promise((resolve) => {
+      const s = document.createElement('script');
+      s.src = 'vendor/canvas-confetti.min.js';
+      s.async = true;
+      s.onload = () => resolve(typeof window.confetti === 'function');
+      s.onerror = () => resolve(false);
+      document.head.appendChild(s);
+    });
+    return confettiTask;
+  }
+
   function celebrate(opt) {
     if (prefersReducedMotion) return false;
-    if (typeof window.confetti !== 'function') return false;
     const o = opt || {};
-    window.confetti({
-      particleCount: o.particleCount || 70,
-      spread: o.spread || 72,
-      startVelocity: o.startVelocity || 34,
-      gravity: 0.9,
-      scalar: o.scalar || 0.9,
-      ticks: 190,
-      angle: o.angle || 90,
-      origin: o.origin || { x: 0.5, y: 0.62 },
-      colors: ['#8b5cf6', '#22e1ff', '#ff3ea5', '#ffb020', '#b6ff3b'],
-      disableForReducedMotion: true
+    loadConfetti().then((ok) => {
+      if (!ok || typeof window.confetti !== 'function') return;
+      window.confetti({
+        particleCount: o.particleCount || 70,
+        spread: o.spread || 72,
+        startVelocity: o.startVelocity || 34,
+        gravity: 0.9,
+        scalar: o.scalar || 0.9,
+        ticks: 190,
+        angle: o.angle || 90,
+        origin: o.origin || { x: 0.5, y: 0.62 },
+        colors: themeColors(),
+        disableForReducedMotion: true
+      });
     });
     return true;
   }
@@ -363,7 +450,7 @@
   async function shareText(text, title) {
     if (navigator.share) {
       try {
-        await navigator.share({ title: title || '抛给宇宙 · 随机决策工具箱', text: text });
+        await navigator.share({ title: title || BRAND.title(), text: text });
         return 'shared';
       } catch (e) {
         if (e && e.name === 'AbortError') return 'cancel';
@@ -372,8 +459,152 @@
     return copyText(text);
   }
 
+  /* =======================================================================
+     5.7 结果带走 · 图片卡片
+     文字复制之外再给一条「存成图」的路：用 Canvas 现画一张卡片，
+     能系统分享就分享文件（部分浏览器支持分享图片），不支持就退化为下载。
+     全程本地完成，不上传任何数据。
+     ======================================================================= */
+  const ICON_IMAGE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.6"/><circle cx="8.6" cy="9.6" r="1.7"/><path d="M4.6 17.6 9.6 12.6l3.4 3.4 3-2.6 3.8 4.2"/></svg>';
+
+  /** 从分享正文里剥掉品牌装饰，拆出「模块名 + 结果值」供卡片使用 */
+  function cardParts(text) {
+    let t = String(text || '').trim();
+    t = t.replace(new RegExp('^「' + BRAND.name + '」'), '');
+    t = t.replace(new RegExp('　?——\\s*来自「' + BRAND.name + '」$'), '');
+    const m = t.match(/^(.+?)[：:]([\s\S]+)$/);
+    return m ? { label: m[1].trim(), value: m[2].trim() } : { label: '', value: t };
+  }
+
+  /** 按最大宽度折行（中文按字断行，不依赖 CSS） */
+  function wrapText(ctx, text, maxWidth) {
+    const chars = String(text || '').split('');
+    const out = [];
+    let line = '';
+    for (let i = 0; i < chars.length; i++) {
+      const next = line + chars[i];
+      if (line && ctx.measureText(next).width > maxWidth) {
+        out.push(line);
+        line = chars[i];
+      } else {
+        line = next;
+      }
+    }
+    if (line) out.push(line);
+    return out;
+  }
+
+  /** 结果卡片：纯 Canvas 绘制，不引任何库 */
+  function resultCard(opt) {
+    const o = opt || {};
+    const W = 1000;
+    const H = 1000;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const g = c.getContext('2d');
+    if (!g) return null;
+
+    const bg = g.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#0b0b16');
+    bg.addColorStop(1, '#171738');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, W, H);
+
+    const glow = g.createRadialGradient(W * 0.5, H * 0.34, 0, W * 0.5, H * 0.34, W * 0.62);
+    glow.addColorStop(0, 'rgba(139,92,246,0.42)');
+    glow.addColorStop(1, 'rgba(139,92,246,0)');
+    g.fillStyle = glow;
+    g.fillRect(0, 0, W, H);
+
+    g.strokeStyle = 'rgba(255,255,255,0.16)';
+    g.lineWidth = 3;
+    g.strokeRect(28, 28, W - 56, H - 56);
+
+    g.textAlign = 'left';
+    g.fillStyle = '#22e1ff';
+    g.font = '700 34px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+    g.fillText(BRAND.name, 72, 126);
+    g.fillStyle = 'rgba(185,192,230,0.72)';
+    g.font = '400 24px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+    g.fillText(BRAND.tagline, 72, 164);
+
+    g.textAlign = 'center';
+    g.fillStyle = 'rgba(185,192,230,0.85)';
+    g.font = '500 28px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+    g.fillText(BRAND.strip(o.label || o.title || ''), W / 2, 340);
+
+    // 结果大字：先按 92px 排版，超过 4 行就自动缩字号，长文本也不会溢出卡片
+    const value = String(o.value || '').trim() || '—';
+    const maxW = W - 160;
+    let fs = 92;
+    g.font = '700 ' + fs + 'px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+    let lines = wrapText(g, value, maxW);
+    while (lines.length > 4 && fs > 40) {
+      fs -= 6;
+      g.font = '700 ' + fs + 'px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+      lines = wrapText(g, value, maxW);
+    }
+    g.fillStyle = '#eef0ff';
+    const lineH = Math.round(fs * 1.34);
+    const startY = H * 0.52 - ((lines.length - 1) * lineH) / 2;
+    lines.forEach((ln, i) => g.fillText(ln, W / 2, startY + i * lineH));
+
+    g.fillStyle = 'rgba(125,133,174,0.95)';
+    g.font = '400 24px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+    g.fillText('密码学级随机 · 数据仅存本地 · ' + todayKey(), W / 2, H - 96);
+
+    return c;
+  }
+
   /**
-   * 生成「复制结果 / 分享」操作行。
+   * 导出结果图片：能分享就分享文件，否则下载。
+   * 返回 'shared' | 'saved' | 'cancel' | 'fail'
+   */
+  async function shareImage(opt) {
+    const o = opt || {};
+    const canvas = resultCard(o);
+    if (!canvas || typeof canvas.toBlob !== 'function') return 'fail';
+
+    const blob = await new Promise((resolve) => {
+      try { canvas.toBlob(resolve, 'image/png'); } catch (e) { resolve(null); }
+    });
+    if (!blob) return 'fail';
+
+    const fileName = (BRAND.name + '-' + (BRAND.strip(o.title || '') || o.label || '结果'))
+      .replace(/[\\/:*?"<>|\s]+/g, '-') + '.png';
+
+    let file = blob;
+    try {
+      if (typeof File === 'function') file = new File([blob], fileName, { type: 'image/png' });
+    } catch (e) { /* 老浏览器没有 File 构造器，直接用 blob 分享 */ }
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: o.title || BRAND.title(), text: o.text || '' });
+        return 'shared';
+      } catch (e) {
+        if (e && e.name === 'AbortError') return 'cancel';
+        // 分享被拒不放弃，继续走下载，至少让用户拿到图
+      }
+    }
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return 'saved';
+    } catch (e) {
+      return 'fail';
+    }
+  }
+
+  /**
+   * 生成「复制结果 / 分享 / 存为图片」操作行。
    * getText 是函数而不是字符串：点击时才取当前结果，切换结果不需要重新绑定事件。
    */
   function shareRow(getText, opt) {
@@ -399,6 +630,25 @@
       });
       row.appendChild(shareBtn);
     }
+
+    // 存为图片：从当前结果文本里拆出「模块名 + 结果」，画成卡片后分享或下载
+    const imgBtn = el('<button type="button" class="btn btn-ghost">' + ICON_IMAGE + '存为图片</button>');
+    imgBtn.addEventListener('click', async () => {
+      Sfx.click();
+      Haptic.tap();
+      const parts = cardParts(getText());
+      const r = await shareImage({
+        title: o.title,
+        label: parts.label,
+        value: parts.value,
+        text: getText()
+      });
+      if (r === 'shared') toast('已调起系统分享');
+      else if (r === 'saved') toast('图片已保存到下载');
+      else if (r === 'fail') toast('当前环境不支持导出图片');
+    });
+    row.appendChild(imgBtn);
+
     return row;
   }
 
@@ -407,6 +657,10 @@
   App.copyText = copyText;
   App.shareText = shareText;
   App.shareRow = shareRow;
+  App.shareImage = shareImage;
+  App.resultCard = resultCard;
+  App.cardParts = cardParts;
+  App.themeColors = themeColors;
 
   /* =======================================================================
      6. 全局提示 Toast
@@ -453,11 +707,38 @@
         backdrop.classList.add('is-closing');
         setTimeout(() => backdrop.remove(), 180);
         document.removeEventListener('keydown', onKey);
+        if (before && typeof before.focus === 'function') {
+          try { before.focus(); } catch (e) { /* 元素可能已被移除 */ }
+        }
         resolve(value);
       }
 
+      // 焦点陷阱：Tab / Shift+Tab 只在弹窗内循环，关闭后把焦点还给触发它的元素，
+      // 避免键盘用户「跳到」弹窗背后的页面上操作看不见的控件。
+      const before = document.activeElement;
+      function focusables() {
+        return Array.prototype.slice
+          .call(backdrop.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+          .filter((n) => !n.disabled && n.offsetParent !== null);
+      }
+
       function onKey(e) {
-        if (e.key === 'Escape') close(null);
+        if (e.key === 'Escape') {
+          close(null);
+          return;
+        }
+        if (e.key !== 'Tab') return;
+        const list = focusables();
+        if (!list.length) return;
+        const first = list[0];
+        const last = list[list.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
 
       buttons.forEach((b) => {
@@ -497,7 +778,7 @@
 
   App.register = function (mod) {
     if (!mod || !mod.id || typeof mod.render !== 'function') {
-      console.warn('[抛给宇宙] 模块注册失败', mod);
+      console.warn('[' + BRAND.name + '] 模块注册失败', mod);
       return;
     }
     modules[mod.id] = mod;
@@ -536,6 +817,78 @@
   let cleanup = null;          // 当前模块的清理函数
   let currentId = null;
 
+  /* =======================================================================
+     8.5 PWA 安装引导
+     浏览器把 beforeinstallprompt 事件暂存下来，等用户主动点「安装」时才弹原生面板；
+     已安装（standalone 模式）或浏览器不支持时入口自动隐藏，不做无谓打扰。
+     ======================================================================= */
+  const ICON_INSTALL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5v11"/><path d="M8 10.5 12 14.5l4-4"/><path d="M4 18.5h16"/></svg>';
+  let deferredPrompt = null;
+
+  function isInstalled() {
+    return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  }
+
+  async function onInstallClick() {
+    if (!deferredPrompt) return;
+    const prompt = deferredPrompt;
+    deferredPrompt = null;
+    const btn = document.getElementById('installBtn');
+    if (btn) btn.hidden = true;
+    try {
+      prompt.prompt();
+      const choice = await prompt.userChoice;
+      toast(choice && choice.outcome === 'accepted' ? '正在添加到桌面' : '已取消，随时可以再来');
+    } catch (e) {
+      toast('安装未完成，可稍后再试');
+    }
+  }
+
+  function paintInstallButton() {
+    const btn = document.getElementById('installBtn');
+    if (!btn) return;
+    const show = !!deferredPrompt && !isInstalled();
+    btn.hidden = !show;
+    if (!show) return;
+    btn.innerHTML = ICON_INSTALL;
+    btn.title = '把「' + BRAND.name + '」装到桌面';
+    btn.setAttribute('aria-label', '安装到桌面');
+    btn.addEventListener('click', onInstallClick);
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    paintInstallButton();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    paintInstallButton();
+    toast('已添加到桌面，下次从图标进入');
+  });
+
+  /* =======================================================================
+     8.6 最近使用
+     底部 Tab 只放得下 5 个高频入口，其余工具靠首页卡片进入；
+     这里记下最近用过的几个并在首页置顶，减少每次都要翻遍首页的成本。
+     ======================================================================= */
+  const RECENT_MAX = 4;
+
+  function noteVisit(id) {
+    if (!id || id === 'home') return;
+    const list = storage.get('recent', []).filter((x) => x !== id);
+    list.unshift(id);
+    storage.set('recent', list.slice(0, RECENT_MAX));
+  }
+
+  App.getRecent = function () {
+    return storage
+      .get('recent', [])
+      .map((id) => modules[id])
+      .filter(Boolean);
+  };
+
   function renderTabbar() {
     const bar = document.getElementById('tabbar');
     bar.innerHTML = '';
@@ -563,8 +916,9 @@
         '<div class="topbar-inner topbar-home">' +
           '<div class="brand">' +
             '<span class="brand-mark">抛</span>' +
-            '<span class="brand-text">抛给宇宙<small>随机决策工具箱</small></span>' +
+            '<span class="brand-text">' + esc(BRAND.name) + '<small>' + esc(BRAND.tagline) + '</small></span>' +
           '</div>' +
+          '<button type="button" class="icon-btn" id="installBtn" aria-label="安装到桌面" hidden></button>' +
           '<button type="button" class="icon-btn" id="sfxBtn" aria-label="音效开关"></button>' +
         '</div>';
     } else {
@@ -577,9 +931,12 @@
             '<h1>' + esc(mod.name) + '</h1>' +
             (mod.tagline ? '<p>' + esc(mod.tagline) + '</p>' : '') +
           '</div>' +
+          '<button type="button" class="icon-btn" id="installBtn" aria-label="安装到桌面" hidden></button>' +
           '<button type="button" class="icon-btn" id="sfxBtn" aria-label="音效开关"></button>' +
         '</div>';
     }
+
+    paintInstallButton();
 
     const back = document.getElementById('backBtn');
     if (back) {
@@ -615,7 +972,7 @@
       '<div class="page page-home">' +
         '<section class="hero">' +
           '<p class="hero-kicker">选择困难专用</p>' +
-          '<h2 class="hero-title">别纠结了，<br /><em>抛给宇宙</em>。</h2>' +
+          '<h2 class="hero-title">别纠结了，<br /><em>' + esc(BRAND.name) + '</em>。</h2>' +
           '<p class="hero-sub">八个工具，覆盖从“吃什么”到“今天什么事别干”的全部犹豫。<br />把选择抛出去，把自己还给自己。</p>' +
         '</section>' +
         '<div class="home-groups"></div>' +
@@ -624,6 +981,18 @@
     );
 
     const box = wrap.querySelector('.home-groups');
+
+    // 最近使用：置顶一排快捷入口，省去每次都要翻完整张工具清单
+    const recent = App.getRecent();
+    if (recent.length) {
+      const sec = el('<section class="group"><h3 class="group-title">最近使用</h3><div class="recent-row"></div></section>');
+      const row = sec.querySelector('.recent-row');
+      recent.forEach((m) => {
+        row.appendChild(el('<a class="chip recent-chip" href="#/' + esc(m.id) + '">' + esc(m.name) + '</a>'));
+      });
+      box.appendChild(sec);
+    }
+
     groups.forEach((g) => {
       const section = el('<section class="group"><h3 class="group-title">' + esc(g.name) + '</h3><div class="card-grid"></div></section>');
       const grid = section.querySelector('.card-grid');
@@ -680,13 +1049,14 @@
       if (id === 'home') {
         renderTopbar(null);
         setActiveTab('home');
-        document.title = '抛给宇宙 · 随机决策工具箱';
+        document.title = BRAND.title();
         renderHome(view);
       } else {
         const mod = modules[id];
+        noteVisit(id);
         renderTopbar(mod);
         setActiveTab(mod.tab || id);
-        document.title = mod.name + ' · 抛给宇宙';
+        document.title = BRAND.title(mod.name);
         const maybe = mod.render(view);
         if (typeof maybe === 'function') cleanup = maybe;
       }
@@ -711,11 +1081,11 @@
           const sw = reg.installing;
           if (sw) sw.addEventListener('statechange', () => {
             if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-              console.info('[抛给宇宙] 新版本已就绪，下次打开自动生效');
+              console.info('[' + BRAND.name + '] 新版本已就绪，下次打开自动生效');
             }
           });
         });
-      }).catch((e) => console.warn('[抛给宇宙] Service Worker 注册失败', e));
+      }).catch((e) => console.warn('[' + BRAND.name + '] Service Worker 注册失败', e));
     });
   }
 
@@ -732,7 +1102,7 @@
       }
     });
 
-    console.info('%c抛给宇宙 v' + App.version, 'color:#8b5cf6;font-weight:bold', '已启动');
+    console.info('%c' + BRAND.name + ' v' + App.version, 'color:#8b5cf6;font-weight:bold', '已启动');
   }
 
   if (document.readyState === 'loading') {

@@ -3,29 +3,40 @@
    - 预缓存全部静态资源（app shell），离线可用
    - 同源 GET 请求走「缓存优先 + 后台更新」（stale-while-revalidate）
    - 跨域请求（若后续接入 CDN）直接走网络，不缓存
-   发版时只需改 VERSION，旧缓存会在 activate 阶段清理。 */
+   版本号与预缓存清单均由 tools/sync-precache.js 自动生成：
+   版本号里带全量内容哈希，文件一变就换版本，activate 阶段自动清理旧缓存。 */
 
-const VERSION = 'ptu-v1.1.0';
+const VERSION = 'ptu-v1.2.0-584d9a62';
+
+/* 下面的清单由 tools/sync-precache.js 自动生成，不要手改。
+   新增 / 改名 / 删除任何静态文件后，跑一次：
+       node tools/sync-precache.js
+   就会重新扫描并写入；VERSION 里带一份全量内容哈希，文件一变缓存自动失效，
+   再也不用人工记着去 bump 版本号。手改的内容会在下次同步时被覆盖。 */
+/* PRECACHE:BEGIN */
 const PRECACHE = [
   './',
-  './index.html',
   './css/style.css',
-  './js/app.js',
-  './js/answers.js',
-  './js/wheel.js',
-  './js/coin-dice.js',
-  './js/blindbox.js',
-  './js/reverse-coin.js',
-  './js/countdown.js',
-  './js/todo-list.js',
-  './vendor/canvas-confetti.min.js',
   './data/answers.json',
   './data/notodo.json',
-  './manifest.json',
   './icons/favicon.svg',
+  './icons/icon-180.png',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  './index.html',
+  './js/answers.js',
+  './js/app.js',
+  './js/blindbox.js',
+  './js/coin-dice.js',
+  './js/countdown.js',
+  './js/reverse-coin.js',
+  './js/todo-list.js',
+  './js/wheel.js',
+  './manifest.json',
+  './vendor/canvas-confetti.min.js'
 ];
+/* PRECACHE:END */
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

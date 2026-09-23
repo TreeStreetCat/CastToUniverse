@@ -113,7 +113,9 @@ vercel --prod        # 首次运行会引导登录并关联项目，结束后输
 
 | 能力 | 实现 | 降级策略 |
 | --- | --- | --- |
-| 结果庆祝粒子 | `vendor/canvas-confetti.min.js`（MIT，10.8KB，本地 vendor + Service Worker 预缓存） | 未加载 / 系统开启「减弱动态效果」→ `App.celebrate()` 直接返回，功能不受影响 |
+| 结果庆祝粒子 | `vendor/canvas-confetti.min.js`（MIT，10.8KB，本地 vendor + 预缓存）。**按需加载**：第一次真正要放彩带时才注入脚本，首屏不为它付流量，粒子颜色从 CSS 变量读取 | 未加载 / 系统开启「减弱动态效果」→ `App.celebrate()` 直接返回，功能不受影响 |
+| 结果带走 | 复制文本 / 系统分享 / **存为图片**（Canvas 现画卡片，支持分享文件时直接分享，否则下载） | 剪贴板不可用 → 手动复制弹窗；无法导出图片 → 提示且不影响文字分享 |
+| 添加到桌面 | `beforeinstallprompt` 暂存后在顶栏给出安装入口 | 已安装（standalone）或浏览器不支持 → 入口自动隐藏 |
 | 系统分享 | `navigator.share` | 不支持 → 剪贴板 → 剪贴板不可用 → 手动复制弹窗 |
 | 摇一摇掷骰 | `DeviceMotion`（iOS 需在用户手势内申请权限） | 无传感器 / 权限被拒 / 1.6 秒内收不到事件流 → 自动关闭开关并提示，按钮照常可用 |
 | 页面转场 | View Transitions API | 不支持 → CSS `page-enter` 动画 |
@@ -135,5 +137,25 @@ vercel --prod        # 首次运行会引导登录并关联项目，结束后输
 - **不重复抽签**：Fisher-Yates 洗牌后顺序取用，而非每次独立随机。
 - **震动**：能力检测 + 用户手势门控（未发生真实手势前不调用，避免控制台报 No user activation）。iOS Safari 不支持则静默降级。
 - **路由**：hash 路由（`#/book`），每页返回清理函数，切换时取消 rAF / 定时器 / ResizeObserver / 设备传感器监听。
-- **离线**：Service Worker 预缓存全部静态资源（含 vendor 插件），导航请求网络优先、断网回退首页缓存；改 `sw.js` 的 `VERSION` 即触发旧缓存清理。
-- **无障碍**：主要按钮 ≥ 44×44px；键盘可用空格 / 回车 / Esc；尊重 `prefers-reduced-motion`。
+- **离线**：Service Worker 预缓存全部静态资源（含 vendor 插件），导航请求网络优先、断网回退首页缓存；预缓存清单与 `VERSION` 均由 `tools/sync-precache.js` 自动生成，版本号带全量内容哈希，文件一变旧缓存自动失效。
+- **数据兜底是软的**：`loadData()` 失败时本次仍立刻返回内置数据，但会标记来源并记录时间，冷却期（60s）过后下次进入模块会重新尝试真实数据；`fetch` 另有 8 秒超时，弱网下不会无限挂起。
+- **无障碍**：主要按钮 ≥ 44×44px；键盘可用空格 / 回车 / Esc；弹窗带焦点陷阱（Tab 只在弹窗内循环，关闭后焦点归还触发元素）；尊重 `prefers-reduced-motion`。
+- **品牌集中**：站名与标语收在 `App.BRAND`（`js/app.js`），改名只需改它 + `index.html` + `manifest.json` 三处。
+
+## 开发与自检脚本
+
+全部零依赖，直接用本机 Node / Python 运行：
+
+| 脚本 | 作用 | 命令 |
+| --- | --- | --- |
+| `tools/test-logic.js` | **核心随机逻辑回归测试**：权重命中率是否等于权重比例、洗牌是否均匀、骰子「点数 ↔ 旋转 ↔ CSS 面位移」是否自洽、无 localStorage 时是否降级、XSS 转义是否完整 | `node tools/test-logic.js` |
+| `tools/sync-precache.js` | 扫描静态文件自动生成 `sw.js` 的预缓存清单，并写入带内容哈希的 `VERSION`；顺带校验 `index.html` 引用的本地资源都已缓存 | `node tools/sync-precache.js` |
+| `tools/smoke-test.js` | 用本机 Chrome（CDP）逐页走查，检查运行时报错与关键交互 | `node tools/smoke-test.js` |
+| `tools/mobile-audit.js` | 多视口 × 多路由的移动端审计：横向溢出、触控目标尺寸、字号 | `node tools/mobile-audit.js` |
+| `tools/make_icons.py` | 由 SVG 源生成各尺寸 PNG 图标 | `python3 tools/make_icons.py` |
+
+改动随机逻辑或骰子 / 转盘映射后，请先跑 `node tools/test-logic.js`；改动静态文件（新增 / 改名 / 删除）后，请跑一次 `node tools/sync-precache.js`。
+
+## 开源许可
+
+MIT，详见 [LICENSE](./LICENSE)。第三方组件 `vendor/canvas-confetti.min.js` 同样为 MIT。

@@ -46,7 +46,9 @@
       let curRotation = 0;
       let busy = false;
       let destroyed = false;
-      let round = 0;
+      // 「本轮次数」和「承认失望的次数」都是长期统计：离开页面再回来应当还在，
+      // 否则每次重新进入都会从 0 开始，统计就失去意义了。
+      let round = App.storage.get('reverse:round', 0) || 0;
 
       const wrap = App.el(
         '<div class="page page-reverse">' +
@@ -86,6 +88,9 @@
               '<div class="notodo-stat"><b id="rvRound">0</b><span>本轮次数</span></div>' +
               '<div class="notodo-stat"><b id="rvHonest">0</b><span>承认失望的次数</span></div>' +
             '</div>' +
+            '<div class="btn-row" style="margin-top:14px">' +
+              '<button type="button" class="btn btn-ghost" id="rvReset">重置统计</button>' +
+            '</div>' +
           '</div>' +
         '</div>'
       );
@@ -100,11 +105,25 @@
 
       let honest = App.storage.get('reverse:honest', 0) || 0;
 
+      function saveStats() {
+        App.storage.set('reverse:round', round);
+        App.storage.set('reverse:honest', honest);
+      }
+
       function paintStats() {
         roundEl.textContent = String(round);
         honestEl.textContent = String(honest);
       }
       paintStats();
+
+      // 与「抛硬币」的统计保持一致：也给一个重置入口
+      wrap.querySelector('#rvReset').addEventListener('click', () => {
+        round = 0;
+        honest = 0;
+        saveStats();
+        paintStats();
+        App.toast('统计已重置');
+      });
 
       function flip() {
         if (busy) return;
@@ -136,6 +155,7 @@
           const picked = isAlpha ? '甲' : '乙';
           const other = isAlpha ? '乙' : '甲';
           round += 1;
+          saveStats();
           paintStats();
           flow.innerHTML =
             '<div class="result-box pop-in">' +
@@ -166,7 +186,7 @@
             App.sfx.pop();
           } else if (feeling === 'disappointed') {
             honest += 1;
-            App.storage.set('reverse:honest', honest);
+            saveStats();
             paintStats();
             flow.insertAdjacentHTML('beforeend',
               '<div class="result-box reverse-step" style="margin-top:12px;border-color:rgba(255,62,165,0.45)">' +

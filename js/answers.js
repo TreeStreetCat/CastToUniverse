@@ -23,10 +23,10 @@
       { text: '时机未到', category: 'wait' },
       { text: '先放一放', category: 'wait' },
       { text: '让子弹飞一会儿', category: 'wait' },
-      { text: '换个角度看', category: 'humor' },
-      { text: '答案在风中，风今天请假', category: 'humor' },
-      { text: '问就是不行，不问也不行', category: 'humor' },
-      { text: '抛硬币吧，别为难我了', category: 'humor' }
+      { text: '先做最小的一步', category: 'humor' },
+      { text: '今天先别决定，明天再说', category: 'humor' },
+      { text: '选更省事的那个', category: 'humor' },
+      { text: '交给硬币，看你的第一反应', category: 'humor' }
     ]
   };
 

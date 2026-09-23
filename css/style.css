@@ -182,7 +182,9 @@ svg { max-width: 100%; width: 100%; height: 100%; fill: none; stroke: currentCol
 
 .topbar-home { justify-content: space-between; }
 
-.topbar-title { flex: 1; min-width: 0; }
+/* flex:1 + min-width:0 保证顶栏标题在 320px 屏上也能被右侧按钮压缩而不是撑破容器；
+   overflow-wrap 兜住长模块名，避免顶栏出现横向滚动。 */
+.topbar-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .topbar-title h1 { font-size: 19px; font-weight: 700; letter-spacing: 0.02em; }
 .topbar-title p { font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 1px; }
 
@@ -213,6 +215,9 @@ svg { max-width: 100%; width: 100%; height: 100%; fill: none; stroke: currentCol
 .icon-btn svg { width: 20px; height: 20px; }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn:active { transform: scale(0.93); }
+/* 安装入口默认隐藏，只有浏览器抛出 beforeinstallprompt 时才显示。
+   .icon-btn 自带 display:grid，会盖掉浏览器默认的 [hidden]{display:none}，必须显式声明。 */
+.icon-btn[hidden] { display: none; }
 
 .view {
   flex: 1;
@@ -468,6 +473,11 @@ svg { max-width: 100%; width: 100%; height: 100%; fill: none; stroke: currentCol
   border-color: color-mix(in srgb, var(--accent, var(--violet)) 60%, transparent);
   color: #fff;
 }
+
+/* 首页「最近使用」快捷入口：底部 Tab 放不下 8 个工具，靠这一排补齐高频入口 */
+.recent-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.recent-chip { text-decoration: none; color: var(--text); font-weight: 600; }
+.recent-chip:hover { background: var(--surface-2); }
 
 .segmented {
   display: inline-flex;

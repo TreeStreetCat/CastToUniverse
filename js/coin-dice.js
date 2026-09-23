@@ -449,4 +449,13 @@
       };
     }
   });
+  /* 测试钩子：tools/test-logic.js 用它校验「点数 ↔ 立方体旋转 ↔ CSS 面位移」三者是否仍然自洽。
+     一旦有人改了 style.css 里某一面的 rotate 值、或改了 FACE_ROTATION，测试会立刻报错，
+     避免出现「骰子转到 5 点、朝向用户的却是 3 点」这类只在真机上才看得出来的问题。
+     运行时不读取这个对象，可安全忽略。 */
+  App.__dice = {
+    PIPS: PIPS,
+    FACE_ROTATION: FACE_ROTATION,
+    FACE_ORDER: FACE_ORDER
+  };
 })();

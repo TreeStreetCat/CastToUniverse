@@ -43,8 +43,12 @@
   加载顺序有依赖：app.js 先定义 window.App 与通用能力（随机 / 音效 / 震动 / 路由），
   再由各功能模块调用 App.register() 自注册，最后 app.js 在 DOMContentLoaded 时初始化。
 -->
-<!-- 可选增强：结果揭晓时的粒子庆祝（canvas-confetti, MIT）。缺失或加载失败不影响任何功能 -->
-<script src="vendor/canvas-confetti.min.js" defer></script>
+<!--
+  可选增强：结果揭晓时的粒子庆祝（canvas-confetti, MIT）。
+  这里不再直接引入：改由 app.js 在第一次真正要放彩带时才注入脚本，
+  首屏不必为一个「锦上添花」的特效付流量。文件仍在 Service Worker 预缓存里，
+  离线时同样可用；加载失败只是没有彩带，不影响任何功能。
+-->
 <script src="js/app.js"></script>
 <script src="js/answers.js"></script>
 <script src="js/wheel.js"></script>
